@@ -22,3 +22,4 @@ Dal pannello desktop puoi:
 - **Minuto `:30` di ogni ora:** `Archiviazione_Dati_Meteo_-11_Centraline-` consolida i rilievi reali CFR delle 13 stazioni.
 - **Ore `07:00` e `20:00`:** `verifica_dati_open_meteo` aggiorna le previsioni orarie ensemble `D+0`, `D+1` e `D+2` delle 13 stazioni.
 - **Minuto `:35` di ogni ora:** `Agro_VPD_Monitor` (`sync_vpd.yml`) cuce serie reale e previsioni e aggiorna `vpd_dataset.json` su GitHub Pages.
+

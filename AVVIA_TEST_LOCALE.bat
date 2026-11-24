@@ -5,3 +5,4 @@ cd /d "%~dp0\site"
 echo Avvio server locale su http://localhost:8090 ...
 start "" "http://localhost:8090"
 python -m http.server 8090
+

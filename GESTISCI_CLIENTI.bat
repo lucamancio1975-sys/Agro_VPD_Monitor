@@ -8,3 +8,4 @@ if %errorlevel% neq 0 (
     echo [ERRORE] Impossibile avviare il pannello Gestione Clienti.
     pause
 )
+
