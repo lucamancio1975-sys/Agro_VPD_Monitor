@@ -1,0 +1,90 @@
+name: Sync Dati VPD & Deploy GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'site/**'
+      - 'vpd_config.json'
+      - 'execution/**'
+      - '.github/workflows/sync_vpd.yml'
+  workflow_dispatch: # Attivato ogni ora al minuto :35 da cron-job.org o manualmente
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "agro-vpd-pages-sync"
+  cancel-in-progress: false
+
+jobs:
+  sync_and_prepare:
+    name: Aggiornamento Dataset VPD (-7gg CFR + 2gg Open-Meteo)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python 3.11
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Installazione dipendenze
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Cucitura Dati Reali CFR + Previsioni Open-Meteo (13 Centraline)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          DATA_HUB_TOKEN: ${{ secrets.DATA_HUB_TOKEN }}
+        run: |
+          python execution/build_vpd_dataset.py
+
+      - name: Commit e Push Dataset Aggiornato
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          git add site/data/vpd_dataset.json site/data/vpd_config.json
+          if git diff --staged --quiet; then
+            echo "Nessuna variazione ai dati VPD."
+          else
+            git commit -m "Auto-sync dataset VPD 13 centraline [skip ci]"
+            git pull --rebase origin main || true
+            git push origin main
+          fi
+
+  deploy_pages:
+    name: Pubblicazione Web App PWA su GitHub Pages
+    needs: sync_and_prepare
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository Aggiornato
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Configurazione GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Caricamento Cartella Sito Statico (./site)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './site'
+
+      - name: Deploy su GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

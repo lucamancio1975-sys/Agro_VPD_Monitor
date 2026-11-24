@@ -1,0 +1,11 @@
+# File privati e segreti locali (MAI su GitHub pubblico!)
+.env
+token*.txt
+admin_registry/
+.tmp/
+__pycache__/
+*.pyc
+*.pyo
+*.bak
+.DS_Store
+Thumbs.db

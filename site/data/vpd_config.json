@@ -1,0 +1,366 @@
+{
+  "metadata": {
+    "versione": "1.0",
+    "unita_misura_vpd": "kPa",
+    "formula_riferimento": "FAO-56 Tetens: es(T) = 0.6108 * exp((17.27 * T) / (T + 237.3)); VPD_air = es(T) * (1 - RH/100)",
+    "nota_operativa": "Valori riferiti a VPD dell'aria da centralina meteo. Usare curva oraria o media diurna (10:00-17:00), evitare la media sulle 24 ore."
+  },
+  "suoli": {
+    "medio_leggero": {
+      "nome_visualizzato": "Medio / Leggero (Sabbioso - Franco-sabbioso)",
+      "rew_mm": [
+        2,
+        10
+      ],
+      "tew_mm": [
+        6,
+        20
+      ],
+      "caratteristica": "Drenaggio rapido, bassa ritenzione, chiusura stomatica precoce ad alto VPD (FAO-56; Koehler et al., 2024; Abdalla et al., 2021)."
+    },
+    "medio_pesante": {
+      "nome_visualizzato": "Medio / Pesante (Franco-argilloso - Argilloso)",
+      "rew_mm": [
+        8,
+        12
+      ],
+      "tew_mm": [
+        22,
+        29
+      ],
+      "caratteristica": "Elevata ritenzione superficiale (fw = 0.3-0.4 a goccia), alto rischio asfissia radicale a basso VPD (FAO-56)."
+    }
+  },
+  "colture": {
+    "pomodoro_industria": {
+      "nome_visualizzato": "Pomodoro da Industria (Pieno Campo)",
+      "scala_grafico_kpa": {
+        "min": 0.0,
+        "max": 3.5
+      },
+      "kpi_consigliato": {
+        "nome": "Ore Attive Giornaliere",
+        "soglia_vpd_kpa": 0.6,
+        "descrizione": "Numero di ore/giorno con VPD > 0.6 kPa (critico in fase di attecchimento aprile/maggio)."
+      },
+      "validazione_scientifica": "Fatti verificati per soglie superiori (Patane et al., 2020: picco gs ~1.7 kPa, min gs 2.4 kPa); deduzione agronomica per soglia anti-asfissia (<0.4 kPa).",
+      "fasce": [
+        {
+          "id": "blu",
+          "colore_nome": "Blu",
+          "colore_hex": "#2563EB",
+          "colore_rgba_sfondo": "rgba(37, 99, 235, 0.18)",
+          "vpd_min": 0.0,
+          "vpd_max": 0.4,
+          "stato_traspirativo": "Bloccato",
+          "azioni_suolo": {
+            "medio_leggero": {
+              "titolo": "STOP IRRIGAZIONE",
+              "dettaglio": "La pianta non beve."
+            },
+            "medio_pesante": {
+              "titolo": "STOP ASSOLUTO",
+              "dettaglio": "Alto rischio asfissia radicale."
+            }
+          }
+        },
+        {
+          "id": "azzurro",
+          "colore_nome": "Azzurro",
+          "colore_hex": "#0EA5E9",
+          "colore_rgba_sfondo": "rgba(14, 165, 233, 0.18)",
+          "vpd_min": 0.4,
+          "vpd_max": 0.8,
+          "stato_traspirativo": "Basso",
+          "azioni_suolo": {
+            "medio_leggero": {
+              "titolo": "RIDUCI VOLUMI (-30%)",
+              "dettaglio": "Irriga solo se il terreno è asciutto."
+            },
+            "medio_pesante": {
+              "titolo": "RINVIA TURNO",
+              "dettaglio": "Terreno ancora saturo, rischio ristagno."
+            }
+          }
+        },
+        {
+          "id": "verde",
+          "colore_nome": "Verde",
+          "colore_hex": "#16A34A",
+          "colore_rgba_sfondo": "rgba(22, 163, 74, 0.18)",
+          "vpd_min": 0.8,
+          "vpd_max": 1.7,
+          "stato_traspirativo": "Ottimale",
+          "azioni_suolo": {
+            "medio_leggero": {
+              "titolo": "IRRIGAZIONE NORMALE",
+              "dettaglio": "Turni regolari e ravvicinati."
+            },
+            "medio_pesante": {
+              "titolo": "IRRIGAZIONE NORMALE",
+              "dettaglio": "Turni standard ben distanziati."
+            }
+          }
+        },
+        {
+          "id": "arancione",
+          "colore_nome": "Arancione",
+          "colore_hex": "#F97316",
+          "colore_rgba_sfondo": "rgba(249, 115, 22, 0.20)",
+          "vpd_min": 1.7,
+          "vpd_max": 2.4,
+          "stato_traspirativo": "Elevato",
+          "azioni_suolo": {
+            "medio_leggero": {
+              "titolo": "FRAZIONA IL TURNO",
+              "dettaglio": "Dividi l'acqua in 2 interventi (rischio stress rapido)."
+            },
+            "medio_pesante": {
+              "titolo": "CONTROLLA E REINTEGRA",
+              "dettaglio": "Mantieni buona umidità per evitare marciume apicale."
+            }
+          }
+        },
+        {
+          "id": "rosso",
+          "colore_nome": "Rosso",
+          "colore_hex": "#DC2626",
+          "colore_rgba_sfondo": "rgba(220, 38, 38, 0.20)",
+          "vpd_min": 2.4,
+          "vpd_max": null,
+          "stato_traspirativo": "Stress Severo",
+          "azioni_suolo": {
+            "medio_leggero": {
+              "titolo": "ANTICIPA E FRAZIONA",
+              "dettaglio": "Dai impulsi brevi prima delle 11:00 e la sera."
+            },
+            "medio_pesante": {
+              "titolo": "ANTICIPA TURNO",
+              "dettaglio": "Irriga al mattino presto o la sera, evita il mezzogiorno."
+            }
+          }
+        }
+      ]
+    },
+    "oliveto_superintensivo": {
+      "nome_visualizzato": "Oliveto Superintensivo (SHD)",
+      "scala_grafico_kpa": {
+        "min": 0.0,
+        "max": 5.0
+      },
+      "kpi_consigliato": {
+        "nome": "Media Diurna VPD (10:00-17:00)",
+        "soglia_vpd_kpa": 2.2,
+        "descrizione": "Specie anisoidrica: monitorare il superamento di 2.2 kPa per sospendere eventuali strategie di deficit spinto."
+      },
+      "validazione_scientifica": "Fatti verificati: max gs tra 1.2 e 2.2 kPa, pendenza SWP -0.13 MPa/kPa in SHD (Garcia-Tejera et al., 2021; Shackel et al., 2021).",
+      "fasce": [
+        {
+          "id": "blu",
+          "colore_nome": "Blu",
+          "colore_hex": "#2563EB",
+          "colore_rgba_sfondo": "rgba(37, 99, 235, 0.18)",
+          "vpd_min": 0.0,
+          "vpd_max": 0.5,
+          "stato_traspirativo": "Nullo",
+          "azioni_suolo": {
+            "medio_leggero": {
+              "titolo": "STOP IRRIGAZIONE",
+              "dettaglio": "Nessun consumo."
+            },
+            "medio_pesante": {
+              "titolo": "STOP IRRIGAZIONE",
+              "dettaglio": "Evita ristagni e rischi fungini."
+            }
+          }
+        },
+        {
+          "id": "azzurro",
+          "colore_nome": "Azzurro",
+          "colore_hex": "#0EA5E9",
+          "colore_rgba_sfondo": "rgba(14, 165, 233, 0.18)",
+          "vpd_min": 0.5,
+          "vpd_max": 1.2,
+          "stato_traspirativo": "Basso",
+          "azioni_suolo": {
+            "medio_leggero": {
+              "titolo": "MANTENIMENTO",
+              "dettaglio": "Irriga solo se non piove da molti giorni."
+            },
+            "medio_pesante": {
+              "titolo": "RINVIA TURNO",
+              "dettaglio": "La riserva del terreno è sufficiente."
+            }
+          }
+        },
+        {
+          "id": "verde",
+          "colore_nome": "Verde",
+          "colore_hex": "#16A34A",
+          "colore_rgba_sfondo": "rgba(22, 163, 74, 0.18)",
+          "vpd_min": 1.2,
+          "vpd_max": 2.2,
+          "stato_traspirativo": "Ottimale",
+          "azioni_suolo": {
+            "medio_leggero": {
+              "titolo": "IRRIGAZIONE NORMALE",
+              "dettaglio": "Gestione ordinaria (deficit leggero possibile)."
+            },
+            "medio_pesante": {
+              "titolo": "IRRIGAZIONE NORMALE",
+              "dettaglio": "Condizione ideale anche per irrigazione deficitaria."
+            }
+          }
+        },
+        {
+          "id": "arancione",
+          "colore_nome": "Arancione",
+          "colore_hex": "#F97316",
+          "colore_rgba_sfondo": "rgba(249, 115, 22, 0.20)",
+          "vpd_min": 2.2,
+          "vpd_max": 3.5,
+          "stato_traspirativo": "Elevato",
+          "azioni_suolo": {
+            "medio_leggero": {
+              "titolo": "AUMENTA FREQUENZA",
+              "dettaglio": "Sospendi il deficit, il terreno si svuota in fretta."
+            },
+            "medio_pesante": {
+              "titolo": "REINTEGRO REGOLARE",
+              "dettaglio": "Segui il piano pieno, monitora l'umidità."
+            }
+          }
+        },
+        {
+          "id": "rosso",
+          "colore_nome": "Rosso",
+          "colore_hex": "#DC2626",
+          "colore_rgba_sfondo": "rgba(220, 38, 38, 0.20)",
+          "vpd_min": 3.5,
+          "vpd_max": null,
+          "stato_traspirativo": "Stress Atmosferico",
+          "azioni_suolo": {
+            "medio_leggero": {
+              "titolo": "IRRIGAZIONE PREVENTIVA",
+              "dettaglio": "Fraziona gli apporti prima dei picchi di caldo."
+            },
+            "medio_pesante": {
+              "titolo": "ANTICIPA TURNO",
+              "dettaglio": "Ricarica il terreno nelle ore fresche."
+            }
+          }
+        }
+      ]
+    },
+    "cucurbitacee": {
+      "nome_visualizzato": "Cucurbitacee (Cocomero e Melone - Pieno Campo)",
+      "scala_grafico_kpa": {
+        "min": 0.0,
+        "max": 3.5
+      },
+      "kpi_consigliato": {
+        "nome": "Media Diurna VPD (10:00-17:00)",
+        "soglia_vpd_kpa": 1.8,
+        "descrizione": "Monitorare sbalzi sopra 1.8 kPa per prevenire spaccature (cracking) in ingrossamento frutto."
+      },
+      "validazione_scientifica": "Ipotesi operativa dedotta da letteratura su Cucurbitaceae in serra e sensibilità stomatica del melone (Rivelli et al., 2004); da tarare localmente.",
+      "fasce": [
+        {
+          "id": "blu",
+          "colore_nome": "Blu",
+          "colore_hex": "#2563EB",
+          "colore_rgba_sfondo": "rgba(37, 99, 235, 0.18)",
+          "vpd_min": 0.0,
+          "vpd_max": 0.4,
+          "stato_traspirativo": "Bloccato",
+          "azioni_suolo": {
+            "medio_leggero": {
+              "titolo": "STOP IRRIGAZIONE",
+              "dettaglio": "Nessun consumo, rischio funghi."
+            },
+            "medio_pesante": {
+              "titolo": "STOP ASSOLUTO",
+              "dettaglio": "Alto rischio asfissia radicale."
+            }
+          }
+        },
+        {
+          "id": "azzurro",
+          "colore_nome": "Azzurro",
+          "colore_hex": "#0EA5E9",
+          "colore_rgba_sfondo": "rgba(14, 165, 233, 0.18)",
+          "vpd_min": 0.4,
+          "vpd_max": 0.9,
+          "stato_traspirativo": "Basso",
+          "azioni_suolo": {
+            "medio_leggero": {
+              "titolo": "RIDUCI VOLUMI (-30%)",
+              "dettaglio": "Turni più leggeri."
+            },
+            "medio_pesante": {
+              "titolo": "RINVIA TURNO",
+              "dettaglio": "Aspetta che la superficie asciughi."
+            }
+          }
+        },
+        {
+          "id": "verde",
+          "colore_nome": "Verde",
+          "colore_hex": "#16A34A",
+          "colore_rgba_sfondo": "rgba(22, 163, 74, 0.18)",
+          "vpd_min": 0.9,
+          "vpd_max": 1.8,
+          "stato_traspirativo": "Ottimale",
+          "azioni_suolo": {
+            "medio_leggero": {
+              "titolo": "IRRIGAZIONE NORMALE",
+              "dettaglio": "Mantieni umidità costante."
+            },
+            "medio_pesante": {
+              "titolo": "IRRIGAZIONE NORMALE",
+              "dettaglio": "Turni regolari senza eccessi."
+            }
+          }
+        },
+        {
+          "id": "arancione",
+          "colore_nome": "Arancione",
+          "colore_hex": "#F97316",
+          "colore_rgba_sfondo": "rgba(249, 115, 22, 0.20)",
+          "vpd_min": 1.8,
+          "vpd_max": 2.6,
+          "stato_traspirativo": "Elevato",
+          "azioni_suolo": {
+            "medio_leggero": {
+              "titolo": "FRAZIONA IL TURNO",
+              "dettaglio": "Evita sbalzi idrici (rischio spaccatura frutti)."
+            },
+            "medio_pesante": {
+              "titolo": "REINTEGRO REGOLARE",
+              "dettaglio": "Mantieni costante il bulbo umido."
+            }
+          }
+        },
+        {
+          "id": "rosso",
+          "colore_nome": "Rosso",
+          "colore_hex": "#DC2626",
+          "colore_rgba_sfondo": "rgba(220, 38, 38, 0.20)",
+          "vpd_min": 2.6,
+          "vpd_max": null,
+          "stato_traspirativo": "Stress Severo",
+          "azioni_suolo": {
+            "medio_leggero": {
+              "titolo": "IRRIGAZIONE SERALE + IMPULSI",
+              "dettaglio": "Evita il caldo centrale, ricarica la sera."
+            },
+            "medio_pesante": {
+              "titolo": "ANTICIPA TURNO",
+              "dettaglio": "Irriga la sera o all'alba."
+            }
+          }
+        }
+      ]
+    }
+  }
+}

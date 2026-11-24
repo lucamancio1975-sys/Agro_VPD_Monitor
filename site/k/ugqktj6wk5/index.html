@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Agro-VPD Monitor — Azienda Test (Demo Tecnico)</title>
+  <meta name="robots" content="noindex, nofollow">
+
+  <!-- PWA Mobile Capabilities -->
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="background-color" content="#f1f5f9">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Agro-VPD">
+
+  <!-- Icons -->
+  <link rel="icon" type="image/png" href="../../icons/favicon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="../../icons/icon-180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="../../icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="../../icons/icon-512.png">
+
+  <!-- Fonts & Styles -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/style.css?v=1.0">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script>
+    window.CLIENT_CONFIG = {"active": true, "companyName": "Azienda Test (Demo Tecnico)", "defaultStation": "TOS11000005", "defaultSoil": "medio_leggero", "defaultCrop": "pomodoro_industria", "rootPath": "../.."};
+  </script>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Header -->
+    <header class="top-header">
+      <div class="brand-wrap">
+        <img src="../../icons/logo.png" alt="Logo" class="brand-logo" onerror="this.style.display='none'">
+        <div class="brand-titles">
+          <div class="brand-name">Agro-VPD Monitor</div>
+          <div class="client-badge" id="client-badge">Azienda Test (Demo Tecnico)</div>
+        </div>
+      </div>
+      <button class="btn-refresh" id="btn-refresh" title="Aggiorna dati meteo">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- Banner Installazione PWA -->
+    <div class="pwa-banner" id="pwa-banner">
+      <div class="pwa-banner-text" id="pwa-banner-text">
+        <strong>Salva l'App sulla schermata Home</strong>
+        Accesso rapido in campo con un tocco
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button class="pwa-btn" id="pwa-install-btn">Installa</button>
+        <button class="pwa-close" id="pwa-close-btn" aria-label="Chiudi">&times;</button>
+      </div>
+    </div>
+
+    <main id="app-main">
+      <!-- 3 Selettori Interattivi (Centralina, Coltura, Terreno) -->
+      <section class="controls-card">
+        <div class="controls-grid">
+          <div class="control-field">
+            <label for="sel-station">📍 Centralina Meteo</label>
+            <select id="sel-station"></select>
+          </div>
+          <div class="control-field">
+            <label for="sel-crop">🌱 Coltura</label>
+            <select id="sel-crop"></select>
+          </div>
+          <div class="control-field">
+            <label for="sel-soil">🪨 Tipo di Terreno</label>
+            <select id="sel-soil"></select>
+          </div>
+        </div>
+        <div class="sim-reset-bar" id="sim-reset-bar">
+          <span class="sim-badge">🔎 Vista esplorativa attiva (alla riapertura tornerà ai tuoi parametri)</span>
+          <button type="button" class="btn-reset-defaults" id="btn-reset-defaults">↩️ Torna ai parametri aziendali</button>
+        </div>
+      </section>
+
+      <!-- Hero Card Semaforo Istantaneo -->
+      <section class="hero-card">
+        <div class="hero-banner" id="hero-banner" style="background-color:#16a34a;">
+          <div class="hero-top-row">
+            <span class="hero-source-tag" id="hero-source-tag">Caricamento centralina...</span>
+            <span class="hero-band-pill" id="hero-band-pill">...</span>
+          </div>
+          <div class="hero-main-row">
+            <div>
+              <span class="hero-vpd-value" id="hero-vpd-num">--</span>
+              <span class="hero-vpd-unit">kPa (VPD)</span>
+            </div>
+          </div>
+          <div class="hero-action-title" id="hero-action-title">Elaborazione consiglio irriguo...</div>
+          <div class="hero-action-detail" id="hero-action-detail"></div>
+        </div>
+        <div class="fallback-notice" id="fallback-notice"></div>
+        <div class="metrics-strip">
+          <div class="metric-cell">
+            <div class="metric-lbl">Temperatura</div>
+            <div class="metric-val" id="val-temp">-- °C</div>
+            <div class="metric-sub">Aria 2m</div>
+          </div>
+          <div class="metric-cell">
+            <div class="metric-lbl">Umidità Rel.</div>
+            <div class="metric-val" id="val-rh">-- %</div>
+            <div class="metric-sub">Igrometria</div>
+          </div>
+          <div class="metric-cell">
+            <div class="metric-lbl" id="lbl-kpi">KPI Coltura</div>
+            <div class="metric-val" id="val-kpi">--</div>
+            <div class="metric-sub" id="sub-kpi">Oggi</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Grafico Interattivo Continuo (-7gg Reali CFR + Previsioni +2gg Open-Meteo) -->
+      <section class="section-card">
+        <div class="section-head">
+          <div>
+            <div class="section-title">📈 Andamento VPD: Storico & Previsioni (+2 Giorni)</div>
+            <div class="section-subtitle">Tocca la curva per leggere ora, VPD, temperatura e consiglio</div>
+          </div>
+          <div class="timeframe-pills">
+            <button type="button" class="tf-pill active" data-tf="full">-7gg + Prev.</button>
+            <button type="button" class="tf-pill" data-tf="5d">-3gg + Prev.</button>
+            <button type="button" class="tf-pill" data-tf="today">Oggi + Prev.</button>
+          </div>
+        </div>
+
+        <div class="chart-legend-strip">
+          <span><span class="line-sample-solid"></span>Rilevato Centralina CFR</span>
+          <span><span class="line-sample-dashed"></span>Previsione Open-Meteo (+2gg)</span>
+        </div>
+
+        <div class="chart-wrapper">
+          <canvas id="vpd-chart"></canvas>
+        </div>
+
+        <div class="bands-legend" id="bands-legend"></div>
+      </section>
+
+      <!-- Sintesi Previsionale Diurna (10:00 - 17:00) Oggi / D+1 / D+2 -->
+      <section class="section-card">
+        <div class="section-head">
+          <div>
+            <div class="section-title">🌤️ Previsione Fabbisogno Diurno (Fascia 10:00 – 17:00)</div>
+            <div class="section-subtitle">Stima ensemble ECMWF + ICON-EU per pianificare i prossimi turni</div>
+          </div>
+        </div>
+        <div class="forecast-grid" id="forecast-grid"></div>
+      </section>
+
+      <!-- Nota Agronomica Suolo & Coltura -->
+      <div class="agro-note-box" id="agro-note-box"></div>
+    </main>
+
+    <footer class="app-footer">
+      <div id="footer-sync">Agro-VPD Monitor • Supporto Decisionale Irriguo</div>
+    </footer>
+  </div>
+
+  <script src="../../js/app.js?v=1.0"></script>
+</body>
+</html>
