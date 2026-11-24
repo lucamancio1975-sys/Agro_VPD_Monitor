@@ -435,7 +435,7 @@ def git_publish_changes(commit_msg: str) -> tuple[bool, str]:
         if diff.returncode == 0:
             return True, "Nessuna modifica da pubblicare."
         subprocess.run(["git", "commit", "-m", commit_msg], cwd=BASE_DIR, check=True, capture_output=True, text=True)
-        subprocess.run(["git", "pull", "--rebase", "origin", "main"], cwd=BASE_DIR, check=False, capture_output=True, text=True)
+        subprocess.run(["git", "pull", "--rebase", "--autostash", "origin", "main"], cwd=BASE_DIR, check=False, capture_output=True, text=True)
         push = subprocess.run(["git", "push", "origin", "main"], cwd=BASE_DIR, check=True, capture_output=True, text=True)
         return True, "Pubblicato su GitHub Pages con successo!"
     except subprocess.CalledProcessError as e:
