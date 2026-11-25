@@ -1,4 +1,4 @@
-const CACHE_NAME = 'agro-vpd-uhnk5yrd6k-v1.2';
+const CACHE_NAME = 'agro-vpd-uhnk5yrd6k-v1.3';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => {

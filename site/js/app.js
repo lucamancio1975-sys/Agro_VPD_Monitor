@@ -19,16 +19,26 @@
   const REMOTE_RAW_BASE = 'https://raw.githubusercontent.com/lucamancio1975-sys/Agro_VPD_Monitor/main/site/data';
   const BG_RESET_MS = 5 * 60 * 1000; // 5 minuti in background -> ripristina default aziendali
 
+  function isMobileViewport() {
+    return window.innerWidth < 680;
+  }
+
+  function getDefaultTimeframe() {
+    return isMobileViewport() ? '5d' : 'full';
+  }
+
   const STATE = {
     vpdConfig: null,
     dataset: null,
     station: CLIENT.defaultStation,
     soil: CLIENT.defaultSoil,
     crop: CLIENT.defaultCrop,
-    timeframe: 'full', // 'full' (-7gg/+2gg), '5d' (-3gg/+2gg), 'today' (Oggi/+2gg)
+    timeframe: getDefaultTimeframe(), // '5d' (-3gg/+2gg) di default su smartphone, 'full' (-7gg/+2gg) su desktop
+    selectedPointIdx: null,
     chart: null,
     hiddenSince: null,
-    deferredInstallPrompt: null
+    deferredInstallPrompt: null,
+    lastIsMobile: isMobileViewport()
   };
 
   const GIORNI_BREVE = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
@@ -190,10 +200,19 @@
     if (selSoil) selSoil.value = STATE.soil;
   }
 
+  function syncTimeframePills() {
+    document.querySelectorAll('.tf-pill').forEach((p) => {
+      p.classList.toggle('active', p.dataset.tf === STATE.timeframe);
+    });
+  }
+
   function resetToClientDefaults(notify = false) {
     STATE.station = CLIENT.defaultStation;
     STATE.soil = CLIENT.defaultSoil;
     STATE.crop = CLIENT.defaultCrop;
+    STATE.timeframe = getDefaultTimeframe();
+    STATE.selectedPointIdx = null;
+    syncTimeframePills();
     populateDropdowns();
     renderAll();
     if (notify) {
@@ -392,12 +411,119 @@
     });
   }
 
-  function renderChart(stData, cropCfg, soilKey) {
+  function computeAutoZoomY(series, cropCfg) {
+    const maxScaleCfg = (cropCfg.scala_grafico_kpa && cropCfg.scala_grafico_kpa.max) || 3.5;
+    const maxDataVpd = Math.max(0, ...series.map((r) => r.vpd || 0));
+    const fasce = cropCfg.fasce || [];
+    const azzurroBand = fasce[1];
+    const minFloor = azzurroBand && azzurroBand.vpd_max ? azzurroBand.vpd_max + 0.2 : 1.0;
+    const rawTarget = Math.max(minFloor, maxDataVpd * 1.18 + 0.22);
+
+    const cleanCeilings = [1.0, 1.2, 1.5, 1.8, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0];
+    let yMax = cleanCeilings.find((c) => c >= rawTarget);
+    if (!yMax) {
+      yMax = Math.ceil((rawTarget + 0.25) * 2) / 2;
+    }
+    if (yMax > maxScaleCfg && maxDataVpd + 0.2 <= maxScaleCfg) {
+      yMax = maxScaleCfg;
+    }
+
+    let stepSize = 0.5;
+    if (yMax <= 1.0) stepSize = 0.2;
+    else if (yMax <= 1.8) stepSize = 0.3;
+    else if (yMax <= 4.0) stepSize = 0.5;
+    else stepSize = 1.0;
+
+    return { yMax, stepSize, isZoomed: yMax < maxScaleCfg, maxScaleCfg };
+  }
+
+  function ensureChartDomContainers() {
     const canvas = document.getElementById('vpd-chart');
-    if (!canvas) return;
+    if (!canvas) return null;
+
+    let wrapper = canvas.closest('.chart-wrapper');
+    if (!wrapper) return null;
+
+    let outer = wrapper.closest('.chart-scroll-outer');
+    if (!outer) {
+      outer = document.createElement('div');
+      outer.className = 'chart-scroll-outer';
+      outer.id = 'chart-scroll-outer';
+      wrapper.parentNode.insertBefore(outer, wrapper);
+      outer.appendChild(wrapper);
+    }
+
+    let scrollHint = document.getElementById('chart-scroll-hint');
+    if (!scrollHint) {
+      scrollHint = document.createElement('div');
+      scrollHint.className = 'chart-scroll-hint';
+      scrollHint.id = 'chart-scroll-hint';
+      scrollHint.innerHTML = '<span>↔️ Scorri col dito a sinistra per esplorare tutti i 7 giorni</span><span>Tocca la curva per i dettagli</span>';
+      outer.parentNode.insertBefore(scrollHint, outer);
+    }
+
+    let touchBar = document.getElementById('chart-touch-bar');
+    if (!touchBar) {
+      touchBar = document.createElement('div');
+      touchBar.className = 'chart-touch-bar';
+      touchBar.id = 'chart-touch-bar';
+      outer.parentNode.insertBefore(touchBar, scrollHint);
+    }
+
+    const legendStrip = outer.parentNode.querySelector('.chart-legend-strip');
+    if (legendStrip && !document.getElementById('chart-scale-badge')) {
+      const badge = document.createElement('span');
+      badge.className = 'chart-scale-badge';
+      badge.id = 'chart-scale-badge';
+      legendStrip.appendChild(badge);
+    }
+
+    return { canvas, wrapper, outer, scrollHint, touchBar };
+  }
+
+  function updateTouchBar(rec, cropCfg, soilKey, isPinnedSelection) {
+    const touchBar = document.getElementById('chart-touch-bar');
+    if (!touchBar || !rec) return;
+
+    const band = getBandForVpd(cropCfg, rec.vpd);
+    const act = (band && band.azioni_suolo && band.azioni_suolo[soilKey]) || {
+      titolo: band ? band.stato_traspirativo : '-'
+    };
+    const hex = band ? band.colore_hex : '#475569';
+    const isReal = rec.s === 'R';
+    const srcBadge = isReal
+      ? '<span class="touch-src-pill is-real">📡 Reale CFR</span>'
+      : '<span class="touch-src-pill is-fore">🌤️ Previsione</span>';
+    const hintSuffix = isPinnedSelection
+      ? ''
+      : '<span class="touch-tap-hint">👆 Tocca il grafico per cambiare ora</span>';
+
+    touchBar.style.borderLeftColor = hex;
+    touchBar.innerHTML = `
+      <div class="touch-row-top">
+        <div class="touch-ts-wrap">
+          <span class="touch-ts">${formatTsShort(rec.ts)}</span>
+          ${srcBadge}
+        </div>
+        <span class="touch-vpd" style="color:${hex};">${rec.vpd.toFixed(2).replace('.', ',')} <small>kPa</small></span>
+      </div>
+      <div class="touch-row-bot">
+        <span class="touch-meteo">🌡️ ${rec.t.toFixed(1).replace('.', ',')}°C &nbsp;•&nbsp; 💧 UR ${rec.rh.toFixed(0)}%</span>
+        <span class="touch-action" style="color:${hex};">${act.titolo}</span>
+      </div>
+      ${hintSuffix}
+    `;
+  }
+
+  function renderChart(stData, cropCfg, soilKey) {
+    const dom = ensureChartDomContainers();
+    if (!dom) return;
+    const { canvas, wrapper, outer, scrollHint } = dom;
 
     let series = stData.hourly || [];
     if (series.length === 0) return;
+
+    const isMobile = isMobileViewport();
 
     // Filtro timeframe scelto dall'utente
     const lastRealTs = stData.last_real_ts || series[0].ts;
@@ -423,7 +549,11 @@
       if (r.s === 'R') lastRealIdx = idx;
     });
 
-    const realValues = series.map((r, idx) => (r.s === 'R' ? r.vpd : null));
+    const defaultIdx = lastRealIdx >= 0 ? lastRealIdx : 0;
+    STATE.selectedPointIdx = defaultIdx;
+    updateTouchBar(series[defaultIdx], cropCfg, soilKey, false);
+
+    const realValues = series.map((r) => (r.s === 'R' ? r.vpd : null));
     const forecastValues = series.map((r, idx) => {
       if (r.s === 'F') return r.vpd;
       // Aggancia l'inizio della linea tratteggiata all'ultimo punto reale per continuità visiva (zero buchi)
@@ -431,11 +561,46 @@
       return null;
     });
 
-    const maxScaleCfg = (cropCfg.scala_grafico_kpa && cropCfg.scala_grafico_kpa.max) || 3.5;
-    const maxDataVpd = Math.max(...series.map((r) => r.vpd || 0));
-    const yMax = Math.max(maxScaleCfg, Math.ceil((maxDataVpd + 0.25) * 2) / 2);
+    // Auto-Zoom intelligente asse Y
+    const { yMax, stepSize, isZoomed } = computeAutoZoomY(series, cropCfg);
+    const scaleBadge = document.getElementById('chart-scale-badge');
+    if (scaleBadge) {
+      const yMaxTxt = yMax.toFixed(1).replace('.', ',');
+      scaleBadge.textContent = isZoomed ? `🔍 Scala auto 0–${yMaxTxt} kPa` : `Scala 0–${yMaxTxt} kPa`;
+    }
 
-    // Plugin sfondo fasce vpd_config.json + linea verticale ORA
+    if (STATE.chart) {
+      STATE.chart.destroy();
+      STATE.chart = null;
+    }
+
+    // Gestione scorrimento orizzontale su smartphone quando si sceglie -7gg + Prev.
+    const isMobileScrollable = isMobile && STATE.timeframe === 'full';
+    if (isMobileScrollable) {
+      const approxDays = Math.max(8, Math.ceil(series.length / 24));
+      const targetPx = Math.max(660, approxDays * 74);
+      outer.classList.add('is-scrollable');
+      wrapper.style.width = `${targetPx}px`;
+      scrollHint.classList.add('visible');
+    } else {
+      outer.classList.remove('is-scrollable');
+      wrapper.style.width = '100%';
+      outer.scrollLeft = 0;
+      scrollHint.classList.remove('visible');
+    }
+
+    // Precalcola gli indici esatti dei tick sull'asse X centrati a mezzogiorno (zero tagli ai bordi, zero sovrapposizioni)
+    const allowedTickIndices = new Set();
+    labels.forEach((ts, idx) => {
+      const hhmm = ts.slice(11, 16);
+      if (hhmm === '12:00') {
+        allowedTickIndices.add(idx);
+      } else if (STATE.timeframe === 'today' && !isMobile && (hhmm === '06:00' || hhmm === '18:00')) {
+        allowedTickIndices.add(idx);
+      }
+    });
+
+    // Plugin sfondo fasce vpd_config.json + separatori mezzanotte + linea ORA + mirino punto attivo
     const vpdBandsPlugin = {
       id: 'vpdBandsBackground',
       beforeDraw(chart) {
@@ -460,11 +625,27 @@
           if (f.vpd_max !== null && f.vpd_max < yMax) {
             ctx.beginPath();
             ctx.setLineDash([4, 4]);
-            ctx.strokeStyle = 'rgba(71, 85, 105, 0.35)';
+            ctx.strokeStyle = 'rgba(71, 85, 105, 0.34)';
             ctx.lineWidth = 1;
             ctx.moveTo(chartArea.left, topPx);
             ctx.lineTo(chartArea.right, topPx);
             ctx.stroke();
+          }
+        });
+
+        // Linee verticali di separazione giorno a mezzanotte (00:00)
+        ctx.setLineDash([2, 3]);
+        ctx.strokeStyle = 'rgba(71, 85, 105, 0.24)';
+        ctx.lineWidth = 1;
+        labels.forEach((ts, idx) => {
+          if (idx > 0 && ts.slice(11, 16) === '00:00') {
+            const xMidnight = xScale.getPixelForValue(idx);
+            if (xMidnight >= chartArea.left && xMidnight <= chartArea.right) {
+              ctx.beginPath();
+              ctx.moveTo(xMidnight, chartArea.top);
+              ctx.lineTo(xMidnight, chartArea.bottom);
+              ctx.stroke();
+            }
           }
         });
 
@@ -482,25 +663,155 @@
 
             ctx.setLineDash([]);
             ctx.fillStyle = '#4f46e5';
-            ctx.font = '700 10px "Plus Jakarta Sans", sans-serif';
-            const tagTxt = 'ORA → PREV.';
+            ctx.font = '700 9.5px "Plus Jakarta Sans", sans-serif';
+            const tagTxt = isMobile ? 'ORA → PREV' : 'ORA → PREV.';
             const tw = ctx.measureText(tagTxt).width + 10;
             const bx = Math.min(Math.max(chartArea.left + 2, xNow - tw / 2), chartArea.right - tw - 2);
-            ctx.fillRect(bx, chartArea.top + 4, tw, 16);
+            ctx.beginPath();
+            if (ctx.roundRect) {
+              ctx.roundRect(bx, chartArea.top + 4, tw, 16, 4);
+            } else {
+              ctx.rect(bx, chartArea.top + 4, tw, 16);
+            }
+            ctx.fill();
             ctx.fillStyle = '#ffffff';
             ctx.fillText(tagTxt, bx + 5, chartArea.top + 15);
           }
         }
         ctx.restore();
+      },
+      afterDatasetsDraw(chart) {
+        const selIdx = STATE.selectedPointIdx;
+        if (selIdx === null || selIdx < 0 || selIdx >= series.length) return;
+        const { ctx, chartArea, scales } = chart;
+        if (!chartArea || !scales.x || !scales.y) return;
+
+        const rec = series[selIdx];
+        const xPx = scales.x.getPixelForValue(selIdx);
+        const yPx = scales.y.getPixelForValue(rec.vpd);
+        if (xPx < chartArea.left || xPx > chartArea.right) return;
+
+        const band = getBandForVpd(cropCfg, rec.vpd);
+        const accentHex = band ? band.colore_hex : '#0284c7';
+
+        ctx.save();
+        if (selIdx !== lastRealIdx) {
+          ctx.beginPath();
+          ctx.setLineDash([2, 2]);
+          ctx.strokeStyle = 'rgba(15, 23, 42, 0.42)';
+          ctx.lineWidth = 1.2;
+          ctx.moveTo(xPx, chartArea.top + 22);
+          ctx.lineTo(xPx, chartArea.bottom);
+          ctx.stroke();
+        }
+
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(xPx, yPx, 6.5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+        ctx.fill();
+        ctx.lineWidth = 2.6;
+        ctx.strokeStyle = accentHex;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(xPx, yPx, 2.8, 0, Math.PI * 2);
+        ctx.fillStyle = accentHex;
+        ctx.fill();
+        ctx.restore();
       }
     };
 
-    if (STATE.chart) {
-      STATE.chart.destroy();
+    const formatYTick = (val) => {
+      if (Math.abs(val) < 0.001) return '0';
+      return Number(val).toFixed(1).replace('.', ',');
+    };
+
+    const yAxisCommon = {
+      min: 0,
+      max: yMax,
+      grid: { display: false },
+      border: { display: false },
+      ticks: {
+        stepSize,
+        padding: 4,
+        font: { family: 'JetBrains Mono', size: isMobile ? 9.5 : 10, weight: '700' },
+        color: '#334155',
+        callback: formatYTick
+      }
+    };
+
+    const scalesCfg = {
+      x: {
+        grid: { display: false },
+        border: { color: '#cbd5e1' },
+        afterBuildTicks(axis) {
+          if (allowedTickIndices.size > 0) {
+            axis.ticks = Array.from(allowedTickIndices).map((idx) => ({ value: idx }));
+          }
+        },
+        ticks: {
+          maxRotation: 0,
+          minRotation: 0,
+          autoSkip: false,
+          padding: 5,
+          font: { family: 'Plus Jakarta Sans', size: isMobile ? 9.5 : 10.5, weight: '700' },
+          color: '#334155',
+          callback(val) {
+            const ts = labels[val];
+            if (!ts) return '';
+            const hhmm = ts.slice(11, 16);
+            const ymd = ts.slice(0, 10);
+            const dt = parseTs(ts);
+            const dd = String(dt.getDate()).padStart(2, '0');
+            const mo = String(dt.getMonth() + 1).padStart(2, '0');
+            const dayLbl = ymd === todayPrefix ? 'OGGI' : GIORNI_BREVE[dt.getDay()];
+
+            if (STATE.timeframe === 'today') {
+              if (hhmm === '12:00') {
+                return [`${dayLbl} 12h`, `${dd}/${mo}`];
+              }
+              return hhmm;
+            }
+            return [dayLbl, `${dd}/${mo}`];
+          }
+        }
+      },
+      y: {
+        ...yAxisCommon,
+        position: 'left',
+        title: {
+          display: !isMobile,
+          text: 'VPD (kPa)',
+          font: { family: 'Plus Jakarta Sans', size: 11, weight: '700' },
+          color: '#475569'
+        }
+      }
+    };
+
+    // Nella vista -7gg scorrevole su smartphone mostriamo la scala Y anche a destra (lato ORA + Previsioni)
+    if (isMobileScrollable) {
+      scalesCfg.yRight = {
+        ...yAxisCommon,
+        position: 'right'
+      };
     }
 
-    const pointRadiusReal = series.length > 96 ? 0 : 2.5;
-    const pointRadiusFore = series.length > 96 ? 0 : 2.5;
+    const handlePointSelect = (_evt, activeEls, chart) => {
+      if (!activeEls || !activeEls.length) return;
+      const idx = activeEls[0].index;
+      if (idx !== STATE.selectedPointIdx && series[idx]) {
+        STATE.selectedPointIdx = idx;
+        updateTouchBar(series[idx], cropCfg, soilKey, true);
+        chart.draw();
+      }
+    };
+
+    const chartEvents = isMobileScrollable
+      ? ['click', 'mousemove', 'mouseout']
+      : ['mousemove', 'mouseout', 'click', 'touchstart', 'touchmove'];
+
+    const pointRadiusBase = series.length > 96 ? 0 : 2.2;
 
     STATE.chart = new Chart(canvas.getContext('2d'), {
       type: 'line',
@@ -512,12 +823,13 @@
             data: realValues,
             borderColor: '#0f172a',
             backgroundColor: '#0f172a',
-            borderWidth: 2.4,
-            pointRadius: (ctx) => (ctx.dataIndex === lastRealIdx ? 5 : pointRadiusReal),
+            borderWidth: isMobile ? 2.2 : 2.4,
+            pointRadius: (ctx) => (ctx.dataIndex === lastRealIdx ? 4.5 : pointRadiusBase),
+            pointHoverRadius: isMobile ? 0 : 5,
             pointBackgroundColor: (ctx) => (ctx.dataIndex === lastRealIdx ? '#ffffff' : '#0f172a'),
             pointBorderColor: '#0f172a',
             pointBorderWidth: 2,
-            tension: 0.22,
+            tension: 0.24,
             spanGaps: true
           },
           {
@@ -525,10 +837,11 @@
             data: forecastValues,
             borderColor: '#4f46e5',
             backgroundColor: '#4f46e5',
-            borderWidth: 2.3,
+            borderWidth: isMobile ? 2.2 : 2.3,
             borderDash: [6, 4],
-            pointRadius: pointRadiusFore,
-            tension: 0.22,
+            pointRadius: pointRadiusBase,
+            pointHoverRadius: isMobile ? 0 : 5,
+            tension: 0.24,
             spanGaps: true
           }
         ]
@@ -536,6 +849,10 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: { duration: 220 },
+        events: chartEvents,
+        onHover: handlePointSelect,
+        onClick: handlePointSelect,
         interaction: {
           mode: 'index',
           intersect: false
@@ -543,6 +860,7 @@
         plugins: {
           legend: { display: false },
           tooltip: {
+            enabled: !isMobile,
             backgroundColor: 'rgba(15, 23, 42, 0.94)',
             titleFont: { family: 'Plus Jakarta Sans', size: 12, weight: '700' },
             bodyFont: { family: 'Plus Jakarta Sans', size: 12 },
@@ -557,7 +875,6 @@
                 return `${formatTsShort(rec.ts)}  •  ${src}`;
               },
               label(item) {
-                // Evita doppio tooltip sul punto di giunzione
                 if (item.datasetIndex === 1 && item.dataIndex === lastRealIdx) return null;
                 const rec = series[item.dataIndex];
                 const band = getBandForVpd(cropCfg, rec.vpd);
@@ -571,62 +888,36 @@
             }
           }
         },
-        scales: {
-          x: {
-            grid: { color: 'rgba(148, 163, 184, 0.18)' },
-            ticks: {
-              maxRotation: 0,
-              autoSkip: true,
-              maxTicksLimit: window.innerWidth < 600 ? 6 : 10,
-              font: { family: 'Plus Jakarta Sans', size: 10, weight: '600' },
-              color: '#475569',
-              callback(val, idx) {
-                const ts = labels[idx];
-                if (!ts) return '';
-                const hh = ts.slice(11, 16);
-                const dt = parseTs(ts);
-                const dd = String(dt.getDate()).padStart(2, '0');
-                const mo = String(dt.getMonth() + 1).padStart(2, '0');
-                if (STATE.timeframe === 'today') {
-                  return `${dd}/${mo} ${hh}`;
-                }
-                return `${dd}/${mo} ${hh}`;
-              }
-            }
-          },
-          y: {
-            min: 0,
-            max: yMax,
-            grid: { display: false },
-            title: {
-              display: true,
-              text: 'VPD (kPa)',
-              font: { family: 'Plus Jakarta Sans', size: 11, weight: '700' },
-              color: '#475569'
-            },
-            ticks: {
-              stepSize: yMax > 3.6 ? 1.0 : 0.5,
-              font: { family: 'JetBrains Mono', size: 10, weight: '700' },
-              color: '#334155'
-            }
-          }
-        }
+        scales: scalesCfg
       },
       plugins: [vpdBandsPlugin]
     });
+
+    // Consente lo scroll nativo fluido: orizzontale+verticale su -7gg mobile, verticale + scrub orizzontale sulle altre viste
+    canvas.style.touchAction = isMobileScrollable ? 'pan-x pan-y' : 'pan-y';
+
+    if (isMobileScrollable) {
+      requestAnimationFrame(() => {
+        outer.scrollLeft = outer.scrollWidth;
+      });
+    }
 
     // Render legenda fasce dinamica sotto il grafico
     const bandsEl = document.getElementById('bands-legend');
     if (bandsEl) {
       bandsEl.innerHTML = '';
       (cropCfg.fasce || []).forEach((f) => {
-        const rangeTxt = f.vpd_max !== null ? `${f.vpd_min.toFixed(1)}–${f.vpd_max.toFixed(1)} kPa` : `> ${f.vpd_min.toFixed(1)} kPa`;
+        const rangeTxt =
+          f.vpd_max !== null
+            ? `${f.vpd_min.toFixed(1).replace('.', ',')}–${f.vpd_max.toFixed(1).replace('.', ',')} kPa`
+            : `> ${f.vpd_min.toFixed(1).replace('.', ',')} kPa`;
         const act = (f.azioni_suolo && f.azioni_suolo[soilKey]) || { titolo: f.stato_traspirativo };
+        const isOutOfZoom = f.vpd_min >= yMax;
         const div = document.createElement('div');
-        div.className = 'band-chip';
+        div.className = `band-chip${isOutOfZoom ? ' is-above-zoom' : ''}`;
         div.innerHTML = `
           <span class="band-dot" style="background:${f.colore_hex};"></span>
-          <div>
+          <div class="band-chip-body">
             <span class="band-chip-title">${act.titolo}</span>
             <span class="band-chip-range">${rangeTxt} • ${f.stato_traspirativo}</span>
           </div>
@@ -826,11 +1117,11 @@
       loadAllData(true);
     });
 
+    syncTimeframePills();
     document.querySelectorAll('.tf-pill').forEach((pill) => {
       pill.addEventListener('click', () => {
-        document.querySelectorAll('.tf-pill').forEach((p) => p.classList.remove('active'));
-        pill.classList.add('active');
         STATE.timeframe = pill.dataset.tf;
+        syncTimeframePills();
         if (STATE.dataset && STATE.vpdConfig) {
           renderChart(
             STATE.dataset.stations[STATE.station],
@@ -839,6 +1130,24 @@
           );
         }
       });
+    });
+
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const nowMobile = isMobileViewport();
+        if (nowMobile !== STATE.lastIsMobile) {
+          STATE.lastIsMobile = nowMobile;
+          if (STATE.dataset && STATE.vpdConfig) {
+            renderChart(
+              STATE.dataset.stations[STATE.station],
+              STATE.vpdConfig.colture[STATE.crop],
+              STATE.soil
+            );
+          }
+        }
+      }, 180);
     });
 
     // Ripristino automatico ai default del cliente quando l'app viene riaperta dal background

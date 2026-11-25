@@ -124,7 +124,7 @@ def render_active_html(client: Dict) -> str:
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../../css/style.css?v=1.2">
+  <link rel="stylesheet" href="../../css/style.css?v=1.3">
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
@@ -237,25 +237,35 @@ def render_active_html(client: Dict) -> str:
 
       <!-- Grafico Interattivo Continuo (-7gg Reali CFR + Previsioni +2gg Open-Meteo) -->
       <section class="section-card">
-        <div class="section-head">
+        <div class="section-head chart-head">
           <div>
-            <div class="section-title">📈 Andamento VPD: Storico & Previsioni (+2 Giorni)</div>
-            <div class="section-subtitle">Tocca la curva per leggere ora, VPD, temperatura e consiglio</div>
+            <div class="section-title">📈 Andamento VPD e Previsioni (+2gg)</div>
           </div>
           <div class="timeframe-pills">
-            <button type="button" class="tf-pill active" data-tf="full">-7gg + Prev.</button>
-            <button type="button" class="tf-pill" data-tf="5d">-3gg + Prev.</button>
+            <button type="button" class="tf-pill" data-tf="full">-7gg + Prev.</button>
+            <button type="button" class="tf-pill active" data-tf="5d">-3gg + Prev.</button>
             <button type="button" class="tf-pill" data-tf="today">Oggi + Prev.</button>
           </div>
         </div>
 
         <div class="chart-legend-strip">
-          <span><span class="line-sample-solid"></span>Rilevato Centralina CFR</span>
-          <span><span class="line-sample-dashed"></span>Previsione Open-Meteo (+2gg)</span>
+          <div class="chart-legend-lines">
+            <span><span class="line-sample-solid"></span>Reale CFR</span>
+            <span><span class="line-sample-dashed"></span>Prev. +2gg</span>
+          </div>
+          <span class="chart-scale-badge" id="chart-scale-badge">Scala auto</span>
         </div>
 
-        <div class="chart-wrapper">
-          <canvas id="vpd-chart"></canvas>
+        <div class="chart-touch-bar" id="chart-touch-bar"></div>
+        <div class="chart-scroll-hint" id="chart-scroll-hint">
+          <span>↔️ Scorri a sinistra per i 7 giorni</span>
+          <span>Tocca per dettagli</span>
+        </div>
+
+        <div class="chart-scroll-outer" id="chart-scroll-outer">
+          <div class="chart-wrapper" id="chart-wrapper">
+            <canvas id="vpd-chart"></canvas>
+          </div>
         </div>
 
         <div class="bands-legend" id="bands-legend"></div>
@@ -270,7 +280,7 @@ def render_active_html(client: Dict) -> str:
     </footer>
   </div>
 
-  <script src="../../js/app.js?v=1.2"></script>
+  <script src="../../js/app.js?v=1.3"></script>
 </body>
 </html>
 """
@@ -349,7 +359,7 @@ def render_client_manifest(client: Dict) -> str:
 
 
 def render_client_sw(token: str) -> str:
-    return f"""const CACHE_NAME = 'agro-vpd-{token}-v1.2';
+    return f"""const CACHE_NAME = 'agro-vpd-{token}-v1.3';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => {{
