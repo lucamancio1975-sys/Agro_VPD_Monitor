@@ -24,6 +24,8 @@ jobs:
   sync_and_prepare:
     name: Aggiornamento Dataset VPD (-7gg CFR + 2gg Open-Meteo)
     runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.decide.outputs.should_deploy }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -51,40 +53,49 @@ jobs:
           python execution/build_vpd_dataset.py
 
       - name: Commit e Push Dataset Aggiornato
-        if: github.event_name == 'workflow_dispatch'
+        id: git_sync
         run: |
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "actions@github.com"
-          git add site/data/vpd_dataset.json site/data/vpd_config.json
-          if git diff --staged --quiet; then
-            echo "Nessuna variazione ai dati VPD."
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
           else
-            git commit -m "Auto-sync dataset VPD 13 centraline [skip ci]"
-            git pull --rebase origin main || true
-            git push origin main
+            git config --global user.name "GitHub Actions Bot"
+            git config --global user.email "actions@github.com"
+            git add site/data/vpd_dataset.json site/data/vpd_config.json
+            if git diff --staged --quiet; then
+              echo "Nessuna variazione ai dati VPD."
+              echo "changed=false" >> $GITHUB_OUTPUT
+            else
+              git commit -m "Auto-sync dataset VPD 13 centraline [skip ci]"
+              git pull --rebase origin main || true
+              git push origin main
+              echo "changed=true" >> $GITHUB_OUTPUT
+            fi
           fi
+
+      - name: Verifica Necessità Deploy Pages
+        id: decide
+        run: |
+          echo "should_deploy=${{ steps.git_sync.outputs.changed }}" >> $GITHUB_OUTPUT
+
+      - name: Configurazione GitHub Pages
+        if: steps.decide.outputs.should_deploy == 'true'
+        uses: actions/configure-pages@v5
+
+      - name: Caricamento Cartella Sito Statico (./site)
+        if: steps.decide.outputs.should_deploy == 'true'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: './site'
 
   deploy_pages:
     name: Pubblicazione Web App PWA su GitHub Pages
     needs: sync_and_prepare
+    if: needs.sync_and_prepare.outputs.should_deploy == 'true'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository Aggiornato
-        uses: actions/checkout@v4
-        with:
-          ref: main
-
-      - name: Configurazione GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Caricamento Cartella Sito Statico (./site)
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: './site'
-
       - name: Deploy su GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
