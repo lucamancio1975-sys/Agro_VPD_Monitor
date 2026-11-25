@@ -408,23 +408,26 @@ def build_whatsapp_message(client: Dict) -> str:
 
     return (
         f"🌱 *AGRO-VPD MONITOR — SUPPORTO IRRIGUO AZIENDALE* 💧\n\n"
-        f"Gentile *{client['company_name']}*,\n"
-        f"ecco il vostro collegamento personale per consultare in tempo reale il VPD (Deficit di Pressione di Vapore), "
+        f"Ciao *{client['company_name']}*,\n"
+        f"ecco il tuo collegamento personale per consultare in tempo reale il VPD attuale (Deficit di Pressione di Vapore), "
         f"lo storico degli ultimi 7 giorni e le previsioni per i prossimi 2 giorni.\n\n"
-        f"⚙️ *Parametri preimpostati per la vostra azienda:*\n"
+        f"💡 *Come ti aiuta nell'irrigazione:* la sola temperatura spesso inganna! Il VPD misura la reale \"sete\" dell'aria "
+        f"combinando temperatura e umidità, indicandoti quanta acqua la pianta e il terreno stanno davvero consumando. "
+        f"Ti permette così di valutare se sospendere o accorciare i tempi quando l'aria è umida e la pianta non traspira "
+        f"(evitando ristagni e asfissia radicale) e di programmare, anticipare o frazionare i turni quando è previsto un forte stress evaporativo.\n\n"
+        f"⚙️ *Parametri preimpostati per la tua azienda:*\n"
         f"• Centralina: *{st_name}*\n"
         f"• Coltura: *{crop_name}*\n"
         f"• Terreno: *{soil_name}*\n\n"
         f"🔗 *Link personale di accesso:*\n{url}\n\n"
-        f"Per averla sempre pronta come una vera App sul telefono:\n\n"
+        f"Per averla sempre pronta come una vera App sul telefono puoi installarla come segue:\n\n"
         f"📱 *ANDROID (Google Chrome)*\n"
         f"1. Apri il link qui sopra in *Chrome*.\n"
         f"2. Tocca *Installa* (o i *3 puntini ⋮* in alto a destra ➔ *Aggiungi a schermata Home*).\n\n"
         f"🍎 *IPHONE / IPAD (Apple Safari)*\n"
         f"1. Apri il link con *Safari*.\n"
         f"2. Tocca *Condividi* in basso (quadrato con freccia verso l'alto ⎋).\n"
-        f"3. Scorri e tocca *\"Aggiungi alla schermata Home\"* ➔ *Aggiungi*.\n\n"
-        f"Buon lavoro!"
+        f"3. Scorri e tocca *\"Aggiungi alla schermata Home\"* ➔ *Aggiungi*."
     )
 
 
