@@ -124,7 +124,7 @@ def render_active_html(client: Dict) -> str:
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../../css/style.css?v=1.1">
+  <link rel="stylesheet" href="../../css/style.css?v=1.2">
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
@@ -185,38 +185,52 @@ def render_active_html(client: Dict) -> str:
         </div>
       </section>
 
-      <!-- Hero Card Semaforo Istantaneo -->
+      <!-- Hero Card Neutro: VPD Istantaneo + Tendenza 3 Giorni + Indicazione Diurna -->
       <section class="hero-card">
-        <div class="hero-banner" id="hero-banner" style="background-color:#16a34a;">
+        <div class="hero-banner" id="hero-banner">
           <div class="hero-top-row">
-            <span class="hero-source-tag" id="hero-source-tag">Caricamento centralina...</span>
-            <span class="hero-band-pill" id="hero-band-pill">...</span>
-          </div>
-          <div class="hero-main-row">
-            <div>
-              <span class="hero-vpd-value" id="hero-vpd-num">--</span>
-              <span class="hero-vpd-unit">kPa (VPD)</span>
+            <div class="hero-instant-block">
+              <span class="hero-instant-lbl">VPD Istantaneo</span>
+              <div class="hero-instant-val-wrap">
+                <span class="hero-vpd-value" id="hero-vpd-num">--</span>
+                <span class="hero-vpd-unit">kPa</span>
+              </div>
             </div>
+            <span class="hero-source-tag" id="hero-source-tag">Caricamento...</span>
           </div>
-          <div class="hero-action-title" id="hero-action-title">Elaborazione consiglio irriguo...</div>
-          <div class="hero-action-detail" id="hero-action-detail"></div>
+
+          <!-- Box Tendenza 3 Giorni (Media Diurna 10:00-17:00) -->
+          <div class="trend-panel">
+            <div class="trend-header-row">
+              <span class="trend-main-badge" id="trend-main-badge">➡️ TENDENZA VPD: ...</span>
+              <span class="trend-window-note">Media diurna 10:00–17:00</span>
+            </div>
+            <div class="trend-days-strip" id="trend-days-strip"></div>
+          </div>
+
+          <!-- Consiglio Operativo Irriguo (basato sul giorno di riferimento diurno, mai sul buio notturno) -->
+          <div class="hero-advice-box" id="hero-advice-box">
+            <div class="hero-advice-kicker" id="hero-advice-kicker">INDICAZIONE IRRIGUA</div>
+            <div class="hero-action-title" id="hero-action-title">Elaborazione consiglio irriguo...</div>
+            <div class="hero-action-detail" id="hero-action-detail"></div>
+          </div>
         </div>
         <div class="fallback-notice" id="fallback-notice"></div>
         <div class="metrics-strip">
           <div class="metric-cell">
             <div class="metric-lbl">Temperatura</div>
             <div class="metric-val" id="val-temp">-- °C</div>
-            <div class="metric-sub">Aria 2m</div>
+            <div class="metric-sub">Ultima ora</div>
           </div>
           <div class="metric-cell">
             <div class="metric-lbl">Umidità Rel.</div>
             <div class="metric-val" id="val-rh">-- %</div>
-            <div class="metric-sub">Igrometria</div>
+            <div class="metric-sub">Ultima ora</div>
           </div>
           <div class="metric-cell">
             <div class="metric-lbl" id="lbl-kpi">KPI Coltura</div>
             <div class="metric-val" id="val-kpi">--</div>
-            <div class="metric-sub" id="sub-kpi">Oggi</div>
+            <div class="metric-sub" id="sub-kpi">Giorno rif.</div>
           </div>
         </div>
       </section>
@@ -247,17 +261,6 @@ def render_active_html(client: Dict) -> str:
         <div class="bands-legend" id="bands-legend"></div>
       </section>
 
-      <!-- Sintesi Previsionale Diurna (10:00 - 17:00) Oggi / D+1 / D+2 -->
-      <section class="section-card">
-        <div class="section-head">
-          <div>
-            <div class="section-title">🌤️ Previsione Fabbisogno Diurno (Fascia 10:00 – 17:00)</div>
-            <div class="section-subtitle">Stima ensemble ECMWF + ICON-EU per pianificare i prossimi turni</div>
-          </div>
-        </div>
-        <div class="forecast-grid" id="forecast-grid"></div>
-      </section>
-
       <!-- Nota Agronomica Suolo & Coltura -->
       <div class="agro-note-box" id="agro-note-box"></div>
     </main>
@@ -267,7 +270,7 @@ def render_active_html(client: Dict) -> str:
     </footer>
   </div>
 
-  <script src="../../js/app.js?v=1.1"></script>
+  <script src="../../js/app.js?v=1.2"></script>
 </body>
 </html>
 """
@@ -346,7 +349,7 @@ def render_client_manifest(client: Dict) -> str:
 
 
 def render_client_sw(token: str) -> str:
-    return f"""const CACHE_NAME = 'agro-vpd-{token}-v1.1';
+    return f"""const CACHE_NAME = 'agro-vpd-{token}-v1.2';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => {{

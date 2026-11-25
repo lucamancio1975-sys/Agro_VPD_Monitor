@@ -201,32 +201,130 @@
     }
   }
 
-  function computeTodayKpi(cropKey, cropCfg, hourly, todayStr) {
-    const todayRows = hourly.filter((r) => r.ts.startsWith(todayStr));
-    if (todayRows.length === 0) {
-      return { label: 'KPI Oggi', val: '-', sub: 'Dati non disp.' };
+  function getRomeClock() {
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Rome',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).formatToParts(now);
+    const map = {};
+    parts.forEach((p) => {
+      map[p.type] = p.value;
+    });
+    const hh = parseInt(map.hour, 10) % 24;
+    const mm = parseInt(map.minute, 10);
+    return {
+      year: parseInt(map.year, 10),
+      month: parseInt(map.month, 10),
+      day: parseInt(map.day, 10),
+      totalMinutes: hh * 60 + mm
+    };
+  }
+
+  function addDaysYmd(y, m, d, deltaDays) {
+    const dt = new Date(y, m - 1, d + deltaDays);
+    const yy = dt.getFullYear();
+    const mm = String(dt.getMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getDate()).padStart(2, '0');
+    return `${yy}-${mm}-${dd}`;
+  }
+
+  function computeDaytimeAvgVpd(hourly, ymdStr) {
+    const dayRows = hourly.filter((r) => r.ts.startsWith(ymdStr));
+    if (!dayRows.length) return null;
+    const daytime = dayRows.filter((r) => {
+      const hh = parseInt(r.ts.slice(11, 13), 10);
+      return hh >= 10 && hh <= 17;
+    });
+    const sample = daytime.length > 0 ? daytime : dayRows;
+    const sum = sample.reduce((acc, r) => acc + r.vpd, 0);
+    return sum / sample.length;
+  }
+
+  function computeThreeDayTrend(hourly) {
+    const clk = getRomeClock();
+    // Finestra 1: 00:00 - 19:00 -> Ieri, Oggi (focus), Domani
+    // Finestra 2: 19:01 - 00:00 -> Oggi, Domani (focus), Dopodomani
+    const isNightShift = clk.totalMinutes >= 19 * 60 + 1;
+
+    const days = isNightShift
+      ? [
+          { date: addDaysYmd(clk.year, clk.month, clk.day, 0), label: 'Oggi', isFocus: false },
+          { date: addDaysYmd(clk.year, clk.month, clk.day, 1), label: 'Domani', isFocus: true },
+          { date: addDaysYmd(clk.year, clk.month, clk.day, 2), label: 'Dopodom.', isFocus: false }
+        ]
+      : [
+          { date: addDaysYmd(clk.year, clk.month, clk.day, -1), label: 'Ieri', isFocus: false },
+          { date: addDaysYmd(clk.year, clk.month, clk.day, 0), label: 'Oggi', isFocus: true },
+          { date: addDaysYmd(clk.year, clk.month, clk.day, 1), label: 'Domani', isFocus: false }
+        ];
+
+    days.forEach((dObj) => {
+      dObj.avgVpd = computeDaytimeAvgVpd(hourly, dObj.date);
+    });
+
+    const v0 = days[0].avgVpd;
+    const v1 = days[1].avgVpd;
+    const v2 = days[2].avgVpd;
+
+    let slope = 0;
+    if (v0 !== null && v1 !== null && v2 !== null) {
+      slope = 0.45 * (v1 - v0) + 0.55 * (v2 - v1);
+    } else if (v1 !== null && v2 !== null) {
+      slope = v2 - v1;
+    } else if (v0 !== null && v1 !== null) {
+      slope = v1 - v0;
+    }
+
+    let trendBadge = '➡️ TENDENZA VPD: STABILE';
+    if (slope >= 0.15) {
+      trendBadge = '📈 TENDENZA VPD: IN AUMENTO';
+    } else if (slope <= -0.15) {
+      trendBadge = '📉 TENDENZA VPD: IN CALO';
+    }
+
+    return {
+      isNightShift,
+      days,
+      focusDay: days[1],
+      trendBadge,
+      adviceKicker: isNightShift
+        ? 'INDICAZIONE IRRIGUA PER DOMANI (DIURNO)'
+        : 'INDICAZIONE IRRIGUA PER OGGI (DIURNO)'
+    };
+  }
+
+  function computeTargetDayKpi(cropKey, cropCfg, hourly, targetDateStr, targetLabel) {
+    const dayRows = hourly.filter((r) => r.ts.startsWith(targetDateStr));
+    if (dayRows.length === 0) {
+      return { label: 'KPI Coltura', val: '-', sub: targetLabel };
     }
 
     const kpiCfg = cropCfg.kpi_consigliato || {};
     if (cropKey === 'pomodoro_industria') {
       const thr = kpiCfg.soglia_vpd_kpa || 0.6;
-      const activeHours = todayRows.filter((r) => r.vpd > thr).length;
+      const activeHours = dayRows.filter((r) => r.vpd > thr).length;
       return {
         label: `Ore VPD > ${thr} kPa`,
         val: `${activeHours} h`,
-        sub: 'Oggi (reali + prev.)'
+        sub: `${targetLabel} (reali + prev.)`
       };
     } else {
-      const daytime = todayRows.filter((r) => {
+      const daytime = dayRows.filter((r) => {
         const hh = parseInt(r.ts.slice(11, 13), 10);
         return hh >= 10 && hh <= 17;
       });
-      const target = daytime.length > 0 ? daytime : todayRows;
+      const target = daytime.length > 0 ? daytime : dayRows;
       const avg = target.reduce((acc, r) => acc + r.vpd, 0) / target.length;
       return {
         label: 'Media 10:00-17:00',
         val: `${avg.toFixed(2)} kPa`,
-        sub: `Soglia att.: ${kpiCfg.soglia_vpd_kpa || '-'} kPa`
+        sub: `${targetLabel} (soglia ${kpiCfg.soglia_vpd_kpa || '-'})`
       };
     }
   }
@@ -564,20 +662,9 @@
       resetBar.classList.toggle('active', isModified);
     }
 
-    // Semaforo attuale
+    // Riquadro Principale Neutro (VPD Istantaneo + Tendenza 3 Giorni + Consiglio Diurno)
     const cur = stData.current;
     if (cur) {
-      const band = getBandForVpd(cropCfg, cur.vpd);
-      const action = (band && band.azioni_suolo && band.azioni_suolo[STATE.soil]) || {
-        titolo: 'N.D.',
-        dettaglio: ''
-      };
-
-      const banner = document.getElementById('hero-banner');
-      if (banner && band) {
-        banner.style.backgroundColor = band.colore_hex;
-      }
-
       const srcTag = document.getElementById('hero-source-tag');
       if (srcTag) {
         srcTag.textContent = cur.is_fallback
@@ -585,13 +672,48 @@
           : `${formatTsShort(cur.ts)}`;
       }
 
-      const bandPill = document.getElementById('hero-band-pill');
-      if (bandPill && band) {
-        bandPill.textContent = `Traspirazione: ${band.stato_traspirativo}`;
-      }
-
       const vpdValEl = document.getElementById('hero-vpd-num');
       if (vpdValEl) vpdValEl.textContent = cur.vpd.toFixed(2);
+
+      // Calcolo Tendenza 3 Giorni (00:00-19:00 -> Ieri/Oggi/Domani | 19:01-00:00 -> Oggi/Domani/Dopodomani)
+      const trend = computeThreeDayTrend(stData.hourly);
+      const trendBadgeEl = document.getElementById('trend-main-badge');
+      if (trendBadgeEl) trendBadgeEl.textContent = trend.trendBadge;
+
+      const stripEl = document.getElementById('trend-days-strip');
+      if (stripEl) {
+        stripEl.innerHTML = '';
+        trend.days.forEach((dObj) => {
+          const dBand = dObj.avgVpd !== null ? getBandForVpd(cropCfg, dObj.avgVpd) : null;
+          const dotColor = dBand ? dBand.colore_hex : '#64748b';
+          const valStr = dObj.avgVpd !== null ? `${dObj.avgVpd.toFixed(2)}` : 'N.D.';
+          const pill = document.createElement('div');
+          pill.className = `trend-day-pill${dObj.isFocus ? ' is-focus' : ''}`;
+          pill.innerHTML = `
+            <span class="trend-day-lbl">${dObj.label}</span>
+            <div class="trend-day-val-row">
+              <span class="trend-band-dot" style="background:${dotColor};"></span>
+              <span class="trend-day-val">${valStr} <small style="font-size:0.68rem;font-weight:600;color:#cbd5e1;">kPa</small></span>
+            </div>
+          `;
+          stripEl.appendChild(pill);
+        });
+      }
+
+      // Il consiglio irriguo si basa SEMPRE sul fabbisogno diurno (10:00-17:00) del giorno focus, mai sul buio notturno
+      const focusVpd = trend.focusDay.avgVpd !== null ? trend.focusDay.avgVpd : cur.vpd;
+      const focusBand = getBandForVpd(cropCfg, focusVpd);
+      const action = (focusBand && focusBand.azioni_suolo && focusBand.azioni_suolo[STATE.soil]) || {
+        titolo: 'N.D.',
+        dettaglio: ''
+      };
+
+      const adviceBox = document.getElementById('hero-advice-box');
+      if (adviceBox && focusBand) {
+        adviceBox.style.borderLeftColor = focusBand.colore_hex;
+      }
+      const adviceKicker = document.getElementById('hero-advice-kicker');
+      if (adviceKicker) adviceKicker.textContent = trend.adviceKicker;
 
       const actTitleEl = document.getElementById('hero-action-title');
       if (actTitleEl) actTitleEl.textContent = action.titolo;
@@ -612,13 +734,16 @@
       document.getElementById('val-temp').textContent = `${cur.t.toFixed(1)} °C`;
       document.getElementById('val-rh').textContent = `${cur.rh.toFixed(0)} %`;
 
-      const todayStr = cur.ts.slice(0, 10);
-      const kpi = computeTodayKpi(STATE.crop, cropCfg, stData.hourly, todayStr);
+      const kpi = computeTargetDayKpi(
+        STATE.crop,
+        cropCfg,
+        stData.hourly,
+        trend.focusDay.date,
+        trend.focusDay.label
+      );
       document.getElementById('lbl-kpi').textContent = kpi.label;
       document.getElementById('val-kpi').textContent = kpi.val;
       document.getElementById('sub-kpi').textContent = kpi.sub;
-
-      renderForecastCards(cropCfg, STATE.soil, stData.hourly, todayStr);
     }
 
     renderChart(stData, cropCfg, STATE.soil);
