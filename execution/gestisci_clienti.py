@@ -124,7 +124,7 @@ def render_active_html(client: Dict) -> str:
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../../css/style.css?v=1.0">
+  <link rel="stylesheet" href="../../css/style.css?v=1.1">
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
@@ -267,7 +267,7 @@ def render_active_html(client: Dict) -> str:
     </footer>
   </div>
 
-  <script src="../../js/app.js?v=1.0"></script>
+  <script src="../../js/app.js?v=1.1"></script>
 </body>
 </html>
 """
@@ -346,7 +346,7 @@ def render_client_manifest(client: Dict) -> str:
 
 
 def render_client_sw(token: str) -> str:
-    return f"""const CACHE_NAME = 'agro-vpd-{token}-v1';
+    return f"""const CACHE_NAME = 'agro-vpd-{token}-v1.1';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => {{

@@ -581,8 +581,8 @@
       const srcTag = document.getElementById('hero-source-tag');
       if (srcTag) {
         srcTag.textContent = cur.is_fallback
-          ? `🌤️ Stima oraria (${formatTsShort(cur.ts)})`
-          : `📡 Centralina ${stData.name} • ${formatTsShort(cur.ts)}`;
+          ? `🌤️ Stima oraria • ${formatTsShort(cur.ts)}`
+          : `${formatTsShort(cur.ts)}`;
       }
 
       const bandPill = document.getElementById('hero-band-pill');
